@@ -3,8 +3,9 @@
  * capture, edge splitting, catch-all, and the conflict checks that fire at
  * insertion time. Run via ctest (radix_router_test).
  *
- * A radix tree is easy to get subtly wrong (prefix splitting, catch-all, the
- * static-vs-wildcard exclusion), so these lean on the awkward shapes.
+ * A radix tree is easy to get subtly wrong (prefix splitting, catch-all, and the
+ * priority-ordered backtracking that lets static, param and catch-all coexist at
+ * one position), so these lean on the awkward shapes.
  */
 
 #include "radix_router.h"
@@ -128,12 +129,6 @@ static void test_conflicts() {
 
 	CHECK(throws_invalid_argument([] {
 		Router r;
-		r.insert("/users/:id", "a");
-		r.insert("/users/new", "b");   // static vs existing wildcard
-	}));
-
-	CHECK(throws_invalid_argument([] {
-		Router r;
 		r.insert("/u/:id", "a");
 		r.insert("/u/:name", "b");      // differing param names, same position
 	}));
@@ -146,7 +141,8 @@ static void test_conflicts() {
 
 	CHECK(throws_invalid_argument([] {
 		Router r;
-		r.insert("/a/*mid/b", "a");     // catch-all not final
+		r.insert("/a/*mid/b", "a");
+		r.insert("/a/*mid", "b");       // same catch-all, both non-final and final
 	}));
 
 	CHECK(throws_invalid_argument([] {
@@ -160,6 +156,52 @@ static void test_conflicts() {
 	}));
 }
 
+// The overlaps the stricter static-XOR-wildcard model forbids but bounded
+// backtracking supports: a static route beside a param at the same position,
+// resolved static-first.
+static void test_static_beside_param() {
+	std::printf("static route beside a param (priority + backtracking)\n");
+	Router r;
+	r.insert("/users/:id", "user");
+	r.insert("/users/new", "new");        // static, same position as :id
+	r.insert("/users/:id/edit", "edit");
+
+	CHECK(resolve(r, "/users/new") == "new");              // static wins over param
+	CHECK(resolve(r, "/users/42", {"id"}) == "user id=42"); // param still reached
+	CHECK(resolve(r, "/users/42/edit", {"id"}) == "edit id=42");
+	CHECK(resolve(r, "/users/new/edit", {"id"}) == "edit id=new"); // no /edit under static "new"; backtracks to :id/edit
+}
+
+// A catch-all in a NON-final position: it captures a greedy run of segments and
+// still lets the fixed continuation match, with backtracking to find the split.
+static void test_non_final_catch_all() {
+	std::printf("non-final catch-all with a continuation\n");
+	Router r;
+	r.insert("/files/*path/raw", "raw");
+	r.insert("/files/*path/meta", "meta");
+
+	CHECK(resolve(r, "/files/a/raw", {"path"}) == "raw path=a");
+	CHECK(resolve(r, "/files/a/b/c/raw", {"path"}) == "raw path=a/b/c");
+	CHECK(resolve(r, "/files/a/b/meta", {"path"}) == "meta path=a/b");
+	CHECK(resolve(r, "/files/a/b/raw") == "raw");          // continuation matched
+	CHECK(resolve(r, "/files/raw") == "<none>");           // catch-all needs 1+ segments before /raw
+	CHECK(resolve(r, "/files/a/b") == "<none>");           // no continuation present
+}
+
+// Xapiand's real shape: a variable-depth namespace (non-final catch-all) then an
+// id, beside a trailing-slash collection form.
+static void test_namespace_then_id() {
+	std::printf("variable-depth namespace + id, collection vs document\n");
+	Router r;
+	r.insert("/*ns/", "collection");      // trailing slash => the whole path is a collection
+	r.insert("/*ns/:id", "document");     // last segment is a document id
+
+	CHECK(resolve(r, "/test/", {"ns"}) == "collection ns=test");
+	CHECK(resolve(r, "/test/namespace/types/", {"ns"}) == "collection ns=test/namespace/types");
+	CHECK(resolve(r, "/test/42", {"ns", "id"}) == "document ns=test id=42");
+	CHECK(resolve(r, "/a/b/c/42", {"ns", "id"}) == "document ns=a/b/c id=42");
+}
+
 int main() {
 	std::printf("== radix::Router tests ==\n");
 	test_static();
@@ -168,6 +210,9 @@ int main() {
 	test_catch_all();
 	test_deep_static_split();
 	test_conflicts();
+	test_static_beside_param();
+	test_non_final_catch_all();
+	test_namespace_then_id();
 
 	std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;

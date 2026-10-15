@@ -1,5 +1,7 @@
 # radix-router
 
+[![CI](https://github.com/Kronuz/radix-router/actions/workflows/ci.yml/badge.svg)](https://github.com/Kronuz/radix-router/actions/workflows/ci.yml)
+
 A high-performance path router for C++: map `/`-separated path patterns to a
 value of any type, and look paths up in time that does not grow with the number
 of routes.

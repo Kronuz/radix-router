@@ -1,95 +1,93 @@
 # radix-router
 
 [![CI](https://github.com/Kronuz/radix-router/actions/workflows/ci.yml/badge.svg)](https://github.com/Kronuz/radix-router/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)
+![Header-only](https://img.shields.io/badge/header--only-yes-green.svg)
 
-A high-performance path router for C++: map `/`-separated path patterns to a
-value of any type, and look paths up in time that does not grow with the number
-of routes.
+A path router for C++20: map `/`-separated patterns to values of any type, and look
+paths up in time that doesn't grow with the number of routes. About 25 ns per lookup
+at 1,024 routes, where a linear scan takes 5 µs.
+
+![radix-router: shared prefixes form one tree; a lookup walks the path once](docs/radix-router.svg)
+
+## ✨ Highlights
+
+- ⚡ **Flat lookups**: a compressed prefix trie, as in httprouter, Gin, and Echo; cost
+  follows the path length, not the route count.
+- 🧩 **Patterns**: static segments, `:name` for one segment, `*name` for the rest.
+- 🪶 **Zero-copy**: parameter names and values are `std::string_view`s; lookups
+  allocate nothing once `Params` has grown.
+- 🚦 **Conflicts fail early**: ambiguous patterns throw from `insert()` at setup.
+- 🔌 **Transport-agnostic**: maps strings to values; the HTTP binding lives in
+  [http](https://github.com/Kronuz/http).
+
+## 📦 Installation
+
+Requires a C++20 compiler; CMake 3.14 or newer for the CMake route. CI builds it on
+Linux (x86_64, arm64), macOS (arm64, x86_64), and FreeBSD, plus ASan, UBSan, and TSan
+builds.
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(radix_router
+  GIT_REPOSITORY https://github.com/Kronuz/radix-router.git
+  GIT_TAG        main)
+FetchContent_MakeAvailable(radix_router)
+
+target_link_libraries(my_app PRIVATE radix_router::radix_router)
+```
+
+Or copy `radix_router.h` onto your include path.
+
+## 🚀 Quick start
 
 ```cpp
 #include "radix_router.h"
 
-radix::Router<int> r;
-r.insert("/documents/count", 1);
-r.insert("/documents/:id", 2);          // ":id" matches one segment
-r.insert("/static/*path", 3);           // "*path" matches the rest
+#include <cassert>
 
-radix::Params params;
-const int* v = r.find("/documents/42", params);   // v -> 2
-params.get("id");                                  // "42" (a view, no copy)
+int main() {
+	radix::Router<int> r;
+	r.insert("/documents/count", 1);
+	r.insert("/documents/:id", 2);     // one segment
+	r.insert("/static/*path", 3);      // the rest of the path
+
+	radix::Params params;
+	const int* v = r.find("/documents/42", params);
+	assert(v && *v == 2);
+	assert(params.get("id") == "42");  // a view into the path
+}
 ```
 
-## Why a radix tree
+## 🎯 When to use it
 
-The obvious first router scans every registered pattern on every request. That is
-O(routes): add more endpoints and every lookup gets slower, and a miss has to
-examine the whole table. A radix tree (a compressed prefix trie) instead walks
-the shared prefixes of the path, so a lookup costs O(path length) and is flat in
-the number of routes. It is the structure `julienschmidt/httprouter` popularized,
-and what Gin, Echo and Fiber build on.
+- ✅ Dispatching URL paths, RPC method names, or any `/`-separated keys.
+- ❌ Regex or per-segment constraints (`:id{[0-9]+}`): match the shape here, then
+  validate in the handler.
+- ⚠️ Static and wildcard children can't share a position: `/users/new` and
+  `/users/:id` conflict, as in httprouter.
 
-The benchmark (`examples/bench.cc`) pits the two against each other on the same
-pattern language, across growing tables. The radix tree stays flat while the
-linear scan climbs:
+## 📚 Documentation
 
-```
-routes  mix            linear ns/op    radix ns/op    speedup
-8       static-hit             43.8           11.3       3.9x
-32      static-hit            191.1           16.3      11.7x
-128     static-hit            692.9           19.3      35.9x
-512     static-hit           2495.3           25.1      99.4x
-1024    static-hit           5048.6           24.7     204.1x
-1024    miss                10587.9           24.0     440.2x
-```
+- [ARCHITECTURE.md](ARCHITECTURE.md): why a radix tree, the pattern rules, and the
+  zero-copy design.
+- [docs/BENCHMARKS.md](docs/BENCHMARKS.md): radix tree against a linear scan.
+- [AGENTS.md](AGENTS.md): repository map and invariants.
 
-(Apple M-series, `-O3`. The radix line moves from 11 to 24 ns only because of
-cache and tree depth; the linear line tracks the route count.)
-
-## Patterns
-
-A pattern is a sequence of `/`-separated segments:
-
-- **static**, e.g. `/documents/count`
-- **`:name` param** matches exactly one segment, up to the next `/`
-- **`*name` catch-all** matches the remainder of the path, and is only allowed as
-  the final segment
-
-Captured `:name` / `*name` values are reported through `Params` at lookup time.
-As in httprouter, a node holds either static children or a single wildcard child,
-never both: registering `/users/new` and `/users/:id` at the same position is a
-conflict and throws from `insert()` (a programming error, surfaced at setup, not
-a per-lookup cost).
-
-## Zero-copy
-
-Lookups allocate nothing on the hot path. Parameter **names** are views into the
-registered pattern (stable for the router's lifetime); parameter **values** are
-views into the path you pass to `find()`. Both are `std::string_view`, so reading
-them copies nothing. The only allocation is `Params` growing its small vector,
-which you can reuse across lookups (`find()` clears it for you).
-
-## Transport-agnostic
-
-This library knows nothing about HTTP: it maps path strings to values. The HTTP
-binding (per-method trees, an `HttpHandler` adapter, 404 vs 405) lives one layer
-up, in [Kronuz/http](https://github.com/Kronuz/http). Anything that routes paths
-can use this directly.
-
-## Build
-
-Header-only; drop in `radix_router.h`, or pull it in with FetchContent:
-
-```cmake
-FetchContent_Declare(radix_router
-	GIT_REPOSITORY https://github.com/Kronuz/radix-router.git GIT_TAG main)
-FetchContent_MakeAvailable(radix_router)
-target_link_libraries(your_target PRIVATE radix_router::radix_router)
-```
-
-To run the tests and benchmark from a checkout:
+## 🛠️ Building and testing
 
 ```sh
 cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
-ctest --test-dir build          # correctness
-./build/radix_router_bench      # linear vs radix throughput
+ctest --test-dir build
+./build/radix_router_bench
 ```
+
+## 🤝 Contributing
+
+Issues and pull requests are welcome. Read [AGENTS.md](AGENTS.md) first. CI must
+pass on every platform.
+
+## 📄 License
+
+MIT, Copyright (c) 2026 Germán Méndez Bravo. See [LICENSE](LICENSE).

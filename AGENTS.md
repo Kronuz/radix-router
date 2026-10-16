@@ -7,8 +7,8 @@ Orientation for anyone (human or agent) working on this library.
 A header-only, transport-agnostic path router. `radix::Router<T>` maps
 `/`-separated path patterns to a value of any type, using a radix tree (a
 compressed prefix trie). The whole library is `radix_router.h`. Lookups are
-O(path length), not O(routes), and zero-copy. Read `README.md` for the API and
-the benchmark numbers; this file is the working notes.
+O(path length), not O(routes), and zero-copy. Read `README.md` for the API, `ARCHITECTURE.md` for the design, and
+`docs/BENCHMARKS.md` for the numbers; this file is the working notes.
 
 ## File map
 
@@ -16,6 +16,7 @@ the benchmark numbers; this file is the working notes.
 radix_router.h     The whole library: radix::Router<T> + radix::Params.
 test/test.cc       ctest: static / param / catch-all / edge-split / conflict cases.
 examples/bench.cc  Runnable benchmark: linear scan vs radix across table sizes.
+docs/radix-router.d2  README diagram; render: d2 --layout elk --sketch --theme 302 docs/radix-router.d2 docs/radix-router.svg
 ```
 
 ## Dependencies

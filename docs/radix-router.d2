@@ -1,0 +1,15 @@
+# radix-router: routes share prefixes. Render: d2 --layout elk --sketch --theme 302 docs/radix-router.d2 docs/radix-router.svg
+direction: right
+root: "/"
+docs: "documents/"
+count: "count → 1"
+id: ":id → 2" {style.fill: "#fff4d6"}
+static: "static/"
+path: "*path → 3" {style.fill: "#fff4d6"}
+root -> docs
+docs -> count
+docs -> id
+root -> static
+static -> path
+q: "find(\"/documents/42\")\n→ 2, id = \"42\"" {shape: page}
+id -> q {style.stroke-dash: 3}

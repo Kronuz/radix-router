@@ -29,4 +29,21 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 	# A runnable benchmark (not a test): ./build/radix_router_bench
 	add_executable(radix_router_bench examples/bench.cc)
 	target_link_libraries(radix_router_bench PRIVATE radix_router)
+
+	# Comparison benchmark (not run by ctest): radix::Router against a hash map of exact routes and
+	# a segment trie on a hash map. The map is abseil's flat_hash_map when abseil is installed and
+	# std::unordered_map otherwise; it is never a dependency of the library target. With the option
+	# on, the program also runs in `--check` mode under ctest (results, no timing). Configure
+	# with -DCMAKE_BUILD_TYPE=Release.
+	option(RADIX_ROUTER_BUILD_BENCH "Build bench/compare.cc" OFF)
+	if(RADIX_ROUTER_BUILD_BENCH)
+		find_package(absl QUIET)
+		add_executable(radix_router_compare bench/compare.cc)
+		target_link_libraries(radix_router_compare PRIVATE radix_router)
+		if(absl_FOUND)
+			target_compile_definitions(radix_router_compare PRIVATE HAVE_ABSL=1)
+			target_link_libraries(radix_router_compare PRIVATE absl::flat_hash_map)
+		endif()
+		add_test(NAME radix_router_compare COMMAND radix_router_compare --check)
+	endif()
 endif()

@@ -16,6 +16,7 @@ O(path length), not O(routes), and zero-copy. Read `README.md` for the API, `ARC
 radix_router.h     The whole library: radix::Router<T> + radix::Params.
 test/test.cc       ctest: static / param / catch-all / edge-split / conflict cases.
 examples/bench.cc  Runnable benchmark: linear scan vs radix across table sizes.
+bench/compare.cc   Comparison benchmark (-DRADIX_ROUTER_BUILD_BENCH=ON, Release): radix vs a hash map of exact routes and a segment trie on a hash map (absl::flat_hash_map when found, std::unordered_map otherwise). `--check` runs the result checks only (a ctest).
 docs/radix-router.d2  README diagram; render: d2 --layout elk --sketch --theme 302 docs/radix-router.d2 docs/radix-router.svg
 ```
 

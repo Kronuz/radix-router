@@ -74,7 +74,7 @@ int main() {
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): why a radix tree, the pattern rules, and the
   zero-copy design.
-- [docs/BENCHMARKS.md](docs/BENCHMARKS.md): radix tree against a linear scan.
+- [docs/BENCHMARKS.md](docs/BENCHMARKS.md): radix tree against a linear scan, a hash map of exact routes and a segment trie.
 - [AGENTS.md](AGENTS.md): repository map and invariants.
 
 ## 🛠️ Building and testing

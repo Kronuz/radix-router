@@ -31,13 +31,19 @@ paths can drop it in, HTTP or not. Do not add dependencies.
   (stable for the router's lifetime); *values* are views into the path passed to
   `find()`. `find()` allocates nothing but the (reusable) `Params` vector. Do not
   introduce per-lookup allocations — the benchmark guards this.
-- **httprouter semantics: static XOR wildcard at a node.** A node holds either
-  static children or a single wildcard child, never both. Registering
-  `/users/new` and `/users/:id` at the same position is a conflict that **throws
-  at insert** — a setup-time programming error, surfaced early, never a per-lookup
-  cost. Keep conflicts loud and early; don't soften them into runtime ambiguity.
+- **Priority with bounded backtracking.** At every node static beats param beats
+  catch-all, so `/users/new` and `/users/:id` coexist (`test/test.cc` pins it). A
+  lookup that meets no wildcard beside a more specific child never backtracks;
+  elsewhere backtracking is bounded by the number of path segments. Keep it that
+  way: the wildcard-free descent is the fast path.
+- **Setup errors throw at insert.** A duplicate pattern, conflicting param or
+  catch-all names at one position, a catch-all both final and non-final at one
+  position, an unnamed wildcard, two wildcards in one segment and an empty pattern
+  throw `std::invalid_argument` from `insert()`, never a per-lookup cost. Keep them
+  loud and early.
 - **Patterns:** static segments, `:name` (matches one segment, up to the next
-  `/`), and `*name` (catch-all, allowed only as the final segment).
+  `/`), and `*name` (one or more segments: the rest of the path when final, a
+  greedy run that lets the rest match when not).
 - **Insert may be expensive; `find()` must be tight.** The tree is built once and
   read many times. Edge-splitting / allocation in `add_route`/`insert_child` is
   fine; the read path is the hot loop.

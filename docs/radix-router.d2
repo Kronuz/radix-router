@@ -1,15 +1,23 @@
-# radix-router: routes share prefixes. Render: d2 --layout elk --sketch --theme 302 docs/radix-router.d2 docs/radix-router.svg
-direction: right
+# radix-router: routes share prefixes in one tree; a lookup walks the path once.
+# Render: d2 --layout elk --sketch --theme 302 docs/radix-router.d2 docs/radix-router.svg
+vars: { d2-config: { layout-engine: elk; theme-id: 302; sketch: true; pad: 24 } }
+direction: down
+*.style.font-size: 18
+
 root: "/"
 docs: "documents/"
 count: "count → 1"
 id: ":id → 2" {style.fill: "#fff4d6"}
 static: "static/"
 path: "*path → 3" {style.fill: "#fff4d6"}
-root -> docs
+root -> docs: {style.stroke: "#b5523b"; style.stroke-width: 3}
 docs -> count
-docs -> id
+docs -> id: {style.stroke: "#b5523b"; style.stroke-width: 3}
 root -> static
 static -> path
-q: "find(\"/documents/42\")\n→ 2, id = \"42\"" {shape: page}
-id -> q {style.stroke-dash: 3}
+
+q: "find(\"/documents/42\")\n→ 2\nid = \"42\"" {
+  shape: page
+  near: center-right
+  style.fill: "#F4F1EA"
+}

@@ -102,19 +102,30 @@ Not for:
 
 ## ⚡ Performance
 
-`bench/compare.cc` times `radix::Router` against a segment trie, one hash-map
-level per path segment (`absl::flat_hash_map`), on REST-shaped route tables where
-both return the same value and parameters, checked before each row is timed.
-Time per lookup, `-O3`, Apple clang 17, abseil 20260817.0:
+[`radix_router_compare`](bench/compare.cc) times one lookup, in ns, on REST-shaped route
+tables (`/api/v1/res7/list`, `/api/v2/res8/:id`, and so on). There is no widely used
+standalone C++ path router to compare with, so the comparator is the router most programs
+build from a standard container: a segment trie, one hash-map level per path segment, with a
+static child tried before a parameter child. Its map is
+[abseil](https://github.com/abseil/abseil-cpp) 20260817.0's `absl::flat_hash_map`, fetched
+by the benchmark target only. The tables are chosen so the segment trie needs no backtracking
+and returns the same value and parameter count as the radix tree on every path, which the
+program checks before it times a row. A row is a table size and a kind of lookup: a static
+hit, a parameter hit (the path fills `:id`), or a miss. Cells are the best of seven samples of at
+least 8 ms; "× faster" is the segment trie's time over the radix tree's, so a
+value below 1 is a loss.
 
-| workload | Apple M4 Pro: radix / segment trie | Intel Core i9-9980HK: radix / segment trie |
-|---|---:|---:|
-| 16 routes, static hit | 21.8 ns / 28.3 ns | 39.6 ns / 57.5 ns |
-| 16 routes, param hit | 38.5 ns / 32.4 ns | 72.0 ns / 57.2 ns |
-| 128 routes, miss | 11.9 ns / 21.1 ns | 25.3 ns / 36.7 ns |
-| 1,024 routes, static hit | 42.0 ns / 25.0 ns | 87.2 ns / 47.9 ns |
-| 1,024 routes, param hit | 61.5 ns / 34.6 ns | 122.8 ns / 63.3 ns |
-| 1,024 routes, miss | 12.2 ns / 21.4 ns | 25.1 ns / 36.4 ns |
+| Workload | M4 Pro radix | M4 Pro segment trie | M4 Pro × faster | i9 radix | i9 segment trie | i9 × faster |
+|---|---:|---:|---:|---:|---:|---:|
+| 16 routes, static hit | 21.8 | 28.3 | 1.30 | 39.6 | 57.5 | 1.45 |
+| 16 routes, param hit | 38.5 | 32.4 | 0.84 | 72.0 | 57.2 | 0.79 |
+| 128 routes, miss | 11.9 | 21.1 | 1.77 | 25.3 | 36.7 | 1.45 |
+| 1,024 routes, static hit | 42.0 | 25.0 | 0.60 | 87.2 | 47.9 | 0.55 |
+| 1,024 routes, param hit | 61.5 | 34.6 | 0.56 | 122.8 | 63.3 | 0.52 |
+| 1,024 routes, miss | 12.2 | 21.4 | 1.75 | 25.1 | 36.4 | 1.45 |
+
+Apple M4 Pro (macOS 26) and Intel Core i9-9980HK (macOS 15, x86-64), Apple clang 17.0.0 with
+`-O3 -DNDEBUG` (CMake Release).
 
 ```sh
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DRADIX_ROUTER_BUILD_BENCH=ON
@@ -122,8 +133,9 @@ cmake --build build --target radix_router_compare
 ./build/radix_router_compare
 ```
 
-The radix tree answers a miss 1.3x to 1.8x faster than the segment trie and wins
-static hits in small tables; the segment trie wins parameter hits at every size.
+The radix tree answers a miss 1.45 to 1.77 times faster than the segment trie and wins
+static hits in small tables; the segment trie wins parameter hits at every size and both
+hits in the 1,024-route table.
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md) has every row, a hash map of whole
 paths, and the linear scan of `./build/radix_router_bench`.
 

@@ -4,8 +4,9 @@
 // capture parameters) and against a segment trie whose children sit in a hash map, the usual
 // router built from a standard container. The tables are chosen so the segment trie needs no
 // backtracking and agrees with the radix tree on every value and parameter count; that is
-// checked before a row is timed. The map is absl::flat_hash_map when CMake finds abseil
-// (HAVE_ABSL) and std::unordered_map otherwise.
+// checked before a row is timed. The map is absl::flat_hash_map (HAVE_ABSL, which the CMake target
+// defines, with abseil fetched at a pinned release) and std::unordered_map when the file is built
+// by hand without it.
 //
 //   radix_router_compare            all rows
 //   radix_router_compare param      only rows whose workload contains "param"
@@ -28,6 +29,7 @@
 
 #include "radix_router.h"
 #ifdef HAVE_ABSL
+#include "absl/base/config.h"
 #include "absl/container/flat_hash_map.h"
 #endif
 
@@ -264,7 +266,11 @@ int main(int argc, char** argv) {
 		else { g_filter = argv[i]; }
 	}
 	if (!g_check) {
+#ifdef HAVE_ABSL
+		std::printf("# map: %s, abseil %d.%d\n", kMap, ABSL_LTS_RELEASE_VERSION, ABSL_LTS_RELEASE_PATCH_LEVEL);
+#else
 		std::printf("# map: %s\n", kMap);
+#endif
 		std::printf("%-30s %-34s %9s %9s  %6s  %6s\n", "workload", "comparator", "ours ns", "comp ns", "ratio", "A/A");
 	}
 	run();

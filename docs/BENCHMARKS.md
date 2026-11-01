@@ -35,9 +35,11 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DRADIX_ROUTER_BUILD_BENCH=ON
 cmake --build build && ./build/radix_router_compare
 ```
 
-The map is `absl::flat_hash_map` when CMake finds abseil and `std::unordered_map` otherwise; the library
-target never links it. Time per lookup (build: per table), `-O3`, Apple clang 17, abseil 20260817.0; the
-last column of each machine is the spread between two runs of radix-router in the same process.
+The map is `absl::flat_hash_map` from [abseil](https://github.com/abseil/abseil-cpp) 20260817.0, which the benchmark
+target fetches; the library target never links it. The segment trie is hand-written in the benchmark file. Time per
+lookup (build: per table), `-O3 -DNDEBUG`, Apple clang 17.0.0 (Apple M4 Pro, macOS 26; Intel Core i9-9980HK, macOS 15,
+x86-64); the last column of each machine is the spread between two runs of radix-router in the same process. The
+`exact paths` comparator is a hash map of whole static paths, which cannot capture parameters.
 
 | workload | M4 Pro: radix / segment trie | A/A | i9-9980HK: radix / segment trie | A/A |
 |---|---:|---:|---:|---:|

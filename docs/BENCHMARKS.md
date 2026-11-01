@@ -43,20 +43,20 @@ x86-64); the last column of each machine is the spread between two runs of radix
 
 | workload | M4 Pro: radix / segment trie | A/A | i9-9980HK: radix / segment trie | A/A |
 |---|---:|---:|---:|---:|
-| 16 routes, static hit | 21.8 ns / 28.3 ns | 1.8% | 39.6 ns / 57.5 ns | 1.1% |
-| 16 routes, param hit | 38.5 ns / 32.4 ns | 2.0% | 72.0 ns / 57.2 ns | 0.5% |
-| 128 routes, static hit | 28.0 ns / 24.9 ns | 9.2% | 56.6 ns / 49.4 ns | 2.8% |
-| 128 routes, param hit | 43.0 ns / 33.4 ns | 5.5% | 90.1 ns / 60.2 ns | 0.5% |
-| 128 routes, miss | 11.9 ns / 21.1 ns | 3.1% | 25.3 ns / 36.7 ns | 0.6% |
-| 1,024 routes, static hit | 42.0 ns / 25.0 ns | 1.4% | 87.2 ns / 47.9 ns | 1.0% |
-| 1,024 routes, param hit | 61.5 ns / 34.6 ns | 0.2% | 122.8 ns / 63.3 ns | 2.1% |
-| 1,024 routes, miss | 12.2 ns / 21.4 ns | 1.8% | 25.1 ns / 36.4 ns | 0.6% |
-| build, 1,024 routes | 108 us / 93.5 us | 0.8% | 308 us / 226 us | 0.2% |
+| 16 routes, static hit | 20.5 ns / 28.2 ns | 5.0% | 39.6 ns / 57.5 ns | 1.1% |
+| 16 routes, param hit | 37.2 ns / 32.4 ns | 1.2% | 72.0 ns / 57.2 ns | 0.5% |
+| 128 routes, static hit | 27.9 ns / 25.2 ns | 3.1% | 56.6 ns / 49.4 ns | 2.8% |
+| 128 routes, param hit | 41.5 ns / 33.3 ns | 4.2% | 90.1 ns / 60.2 ns | 0.5% |
+| 128 routes, miss | 12.0 ns / 22.6 ns | 3.0% | 25.3 ns / 36.7 ns | 0.6% |
+| 1,024 routes, static hit | 34.9 ns / 25.0 ns | 1.5% | 87.2 ns / 47.9 ns | 1.0% |
+| 1,024 routes, param hit | 57.0 ns / 35.0 ns | 4.4% | 122.8 ns / 63.3 ns | 2.1% |
+| 1,024 routes, miss | 12.1 ns / 21.0 ns | 2.5% | 25.1 ns / 36.4 ns | 0.6% |
+| build, 1,024 routes | 109 us / 90 us | 0.6% | 308 us / 226 us | 0.2% |
 
-A static hit costs 5.9 to 10.4 times a lookup in a hash map of whole paths on the M4 Pro (3.7 to 4.0 ns), and 2.8
+A static hit costs 5.3 to 9.2 times a lookup in a hash map of whole paths on the M4 Pro (3.8 to 3.9 ns), and 2.8
 to 5.4 times on the i9; that map answers no parameter lookups. The radix tree is ahead of the segment trie on
-every miss (1.3x to 1.8x) and on static hits in the 16-route table, and behind it on parameter hits at every
-size and on both lookups in the 1,024-route table (1.7x to 1.9x on both machines). The benchmark does not
+every miss (1.45x to 1.89x) and on static hits in the 16-route table, and behind it on parameter hits at every
+size and on both lookups in the 1,024-route table (1.4x to 1.9x on both machines). The benchmark does not
 isolate where the large-table gap comes from; candidates are the linear scan of the first bytes of a node's
 static children and the `emplace_back` into `Params` for each captured parameter. These rows are the
 starting point for any change to the node layout.

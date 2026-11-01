@@ -117,12 +117,12 @@ value below 1 is a loss.
 
 | Workload | M4 Pro radix | M4 Pro segment trie | M4 Pro × faster | i9 radix | i9 segment trie | i9 × faster |
 |---|---:|---:|---:|---:|---:|---:|
-| 16 routes, static hit | 21.8 | 28.3 | 1.30 | 39.6 | 57.5 | 1.45 |
-| 16 routes, param hit | 38.5 | 32.4 | 0.84 | 72.0 | 57.2 | 0.79 |
-| 128 routes, miss | 11.9 | 21.1 | 1.77 | 25.3 | 36.7 | 1.45 |
-| 1,024 routes, static hit | 42.0 | 25.0 | 0.60 | 87.2 | 47.9 | 0.55 |
-| 1,024 routes, param hit | 61.5 | 34.6 | 0.56 | 122.8 | 63.3 | 0.52 |
-| 1,024 routes, miss | 12.2 | 21.4 | 1.75 | 25.1 | 36.4 | 1.45 |
+| 16 routes, static hit | 20.5 | 28.2 | 1.38 | 39.6 | 57.5 | 1.45 |
+| 16 routes, param hit | 37.2 | 32.4 | 0.87 | 72.0 | 57.2 | 0.79 |
+| 128 routes, miss | 12.0 | 22.6 | 1.89 | 25.3 | 36.7 | 1.45 |
+| 1,024 routes, static hit | 34.9 | 25.0 | 0.72 | 87.2 | 47.9 | 0.55 |
+| 1,024 routes, param hit | 57.0 | 35.1 | 0.61 | 122.8 | 63.3 | 0.52 |
+| 1,024 routes, miss | 12.1 | 21.0 | 1.74 | 25.1 | 36.4 | 1.45 |
 
 Apple M4 Pro (macOS 26) and Intel Core i9-9980HK (macOS 15, x86-64), Apple clang 17.0.0 with
 `-O3 -DNDEBUG` (CMake Release).
@@ -133,7 +133,7 @@ cmake --build build --target radix_router_compare
 ./build/radix_router_compare
 ```
 
-The radix tree answers a miss 1.45 to 1.77 times faster than the segment trie and wins
+The radix tree answers a miss 1.45 to 1.89 times faster than the segment trie and wins
 static hits in small tables; the segment trie wins parameter hits at every size and both
 hits in the 1,024-route table.
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md) has every row, a hash map of whole

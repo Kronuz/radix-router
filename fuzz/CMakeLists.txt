@@ -1,0 +1,8 @@
+if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  message(FATAL_ERROR "BUILD_FUZZING requires Clang with libFuzzer")
+endif()
+add_executable(radix_router_fuzzer parse.cc)
+target_link_libraries(radix_router_fuzzer PRIVATE radix_router)
+target_include_directories(radix_router_fuzzer PRIVATE "${PROJECT_SOURCE_DIR}/test")
+target_compile_options(radix_router_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all)
+target_link_options(radix_router_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined)

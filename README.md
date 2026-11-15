@@ -141,6 +141,8 @@ paths, and the linear scan of `./build/radix_router_bench`.
 
 ## 📚 Documentation
 
+- [The Fork in the Path](https://kronuz.github.io/blog/radix-router/):
+  the Familiars post on why it exists and how it works.
 - [ARCHITECTURE.md](ARCHITECTURE.md): why a radix tree, the pattern rules and
   their priority, and the zero-copy design.
 - [docs/BENCHMARKS.md](docs/BENCHMARKS.md): the radix tree against a linear scan,

@@ -227,6 +227,22 @@ static void test_nested_catch_all_bounded() {
 	CHECK(resolve(r, path + "/z").rfind("deep", 0) == 0);   // the continuation still matches
 }
 
+// The memoized matcher is used only once a pattern has 2+ catch-alls, and agrees with the plain one.
+static void test_nested_flag_and_agreement() {
+	std::printf("nested catch-all flag and matcher agreement\n");
+	const char* common[] = {"/", "/users/:id", "/files/*path/raw", "/*ns/", "/*ns/:id", "/static/*p"};
+	Router plain, mixed;
+	for (const char* p : common) { plain.insert(p, p); mixed.insert(p, p); }
+	CHECK(!plain.has_nested_catch_alls());
+	CHECK(!mixed.has_nested_catch_alls());
+	mixed.insert("/m/*a/*b/end", "nested");
+	CHECK(mixed.has_nested_catch_alls());
+	for (const char* path : {"/", "/users/7", "/files/a/b/raw", "/a/b/c/", "/a/b/c/42", "/static/x/y", "/files/a/b", "/zz"}) {
+		CHECK(resolve(plain, path) == resolve(mixed, path));
+	}
+	CHECK(resolve(mixed, "/m/1/2/3/end").rfind("nested", 0) == 0);
+}
+
 int main() {
 	std::printf("== radix::Router tests ==\n");
 	test_static();
@@ -239,6 +255,7 @@ int main() {
 	test_non_final_catch_all();
 	test_namespace_then_id();
 	test_nested_catch_all_bounded();
+	test_nested_flag_and_agreement();
 
 	std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;

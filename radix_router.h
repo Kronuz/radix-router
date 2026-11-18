@@ -101,6 +101,9 @@ public:
 	// errors, caught at setup rather than per lookup).
 	void insert(std::string_view pattern, T value) {
 		if (pattern.empty()) { throw std::invalid_argument("pattern must not be empty"); }
+		std::size_t stars = 0;
+		for (char c : pattern) { stars += (c == '*'); }
+		if (stars >= 2) { nested_ = true; }   // set even if the insert throws: conservative
 		root_.add_route(pattern, std::move(value));
 	}
 
@@ -108,9 +111,12 @@ public:
 	// pattern matches. Captured params are reported through `params` (cleared first).
 	const T* find(std::string_view path, Params& params) const {
 		params.clear();
-		Memo memo;
-		return root_.match(path, params, memo);
+		if (!nested_) { return root_.match(path, params); }
+		return find_memo(path, params);
 	}
+
+	// True once a pattern with 2+ catch-alls was inserted (lookups then use the memoized matcher).
+	bool has_nested_catch_alls() const { return nested_; }
 
 	// Convenience overload when the caller does not need the captured params.
 	const T* find(std::string_view path) const {
@@ -119,6 +125,13 @@ public:
 	}
 
 private:
+	// Matching with failed-state memoization, for routers that registered a pattern with 2+
+	// catch-alls. Kept out of line so ordinary routers run the plain matcher unchanged.
+	[[gnu::noinline]] const T* find_memo(std::string_view path, Params& params) const {
+		Memo memo;
+		return root_.match_memo(path, params, memo);
+	}
+
 	enum class NType : unsigned char { Static, Param, CatchAll };
 
 	// Failed non-final catch-all continuations of one lookup, as (node, remaining
@@ -268,13 +281,13 @@ private:
 		// Enter this node (consume its static edge, or capture a segment/run), then
 		// dispatch its children on the remainder. Returns the matched value, or
 		// nullptr to make the caller backtrack.
-		const T* match(std::string_view path, Params& params, Memo& memo) const {
+		const T* match(std::string_view path, Params& params) const {
 			switch (type) {
 				case NType::Static:
 					if (path.size() < this->path.size() || path.compare(0, this->path.size(), this->path) != 0) {
 						return nullptr;
 					}
-					return dispatch(path.substr(this->path.size()), params, memo);
+					return dispatch(path.substr(this->path.size()), params);
 
 				case NType::Param: {
 					std::size_t end = 0;
@@ -282,7 +295,73 @@ private:
 					if (end == 0) { return nullptr; }   // a param needs a non-empty segment
 					std::size_t saved = params.size();
 					params.add(name, path.substr(0, end));
-					if (const T* hit = dispatch(path.substr(end), params, memo)) { return hit; }
+					if (const T* hit = dispatch(path.substr(end), params)) { return hit; }
+					params.truncate(saved);
+					return nullptr;
+				}
+
+				case NType::CatchAll:
+					if (!catchall_multi) {   // final catch-all: consume the whole remainder
+						params.add(name, path);
+						return value ? &*value : nullptr;
+					}
+					// non-final: capture 1+ segments, backtracking, then the continuation.
+					for (std::size_t pos = 0;;) {
+						std::size_t seg_end = pos;
+						while (seg_end < path.size() && path[seg_end] != '/') { ++seg_end; }
+						if (seg_end == pos) { break; }   // no further segment to consume
+						pos = seg_end;
+						std::size_t saved = params.size();
+						params.add(name, path.substr(0, pos));
+						if (const T* hit = dispatch(path.substr(pos), params)) { return hit; }
+						params.truncate(saved);
+						if (pos < path.size() && path[pos] == '/') { ++pos; } else { break; }
+					}
+					return nullptr;
+			}
+			return nullptr;
+		}
+
+		// After a node consumed its own text/capture, try its children on `path` in
+		// priority order: static (exact first byte) > param > catch-all. The single
+		// point where bounded backtracking branches.
+		const T* dispatch(std::string_view path, Params& params) const {
+			if (path.empty()) { return value ? &*value : nullptr; }
+			char c = path.front();
+			for (std::size_t k = 0; k < indices.size(); ++k) {
+				if (indices[k] == c) {
+					if (const T* hit = statics[k]->match(path, params)) { return hit; }
+					break;   // at most one static child starts with c; fall through to the wildcards
+				}
+			}
+			if (param) {
+				if (const T* hit = param->match(path, params)) { return hit; }
+			}
+			if (catchall) {
+				if (const T* hit = catchall->match(path, params)) { return hit; }
+			}
+			return nullptr;
+		}
+
+		// ---- lookup, memoized (routers with nested catch-alls) -------------
+		// Enter this node (consume its static edge, or capture a segment/run), then
+		// dispatch its children on the remainder. Returns the matched value, or
+		// nullptr to make the caller backtrack.
+		const T* match_memo(std::string_view path, Params& params, Memo& memo) const {
+			switch (type) {
+				case NType::Static:
+					if (path.size() < this->path.size() || path.compare(0, this->path.size(), this->path) != 0) {
+						return nullptr;
+					}
+					return dispatch_memo(path.substr(this->path.size()), params, memo);
+
+				case NType::Param: {
+					std::size_t end = 0;
+					while (end < path.size() && path[end] != '/') { ++end; }
+					if (end == 0) { return nullptr; }   // a param needs a non-empty segment
+					std::size_t saved = params.size();
+					params.add(name, path.substr(0, end));
+					if (const T* hit = dispatch_memo(path.substr(end), params, memo)) { return hit; }
 					params.truncate(saved);
 					return nullptr;
 				}
@@ -302,7 +381,7 @@ private:
 							std::size_t saved = params.size();
 							params.add(name, path.substr(0, pos));
 							++memo.nest;
-							const T* hit = dispatch(path.substr(pos), params, memo);
+							const T* hit = dispatch_memo(path.substr(pos), params, memo);
 							--memo.nest;
 							if (hit) { return hit; }
 							params.truncate(saved);
@@ -312,7 +391,7 @@ private:
 							if (memo.failed && memo.failed->count(state)) { return nullptr; }
 							std::size_t saved = params.size();
 							params.add(name, path.substr(0, pos));
-							if (const T* hit = dispatch(path.substr(pos), params, memo)) { return hit; }
+							if (const T* hit = dispatch_memo(path.substr(pos), params, memo)) { return hit; }
 							params.truncate(saved);
 							if (!memo.failed) { memo.failed = std::make_unique<typename Memo::Set>(); }
 							memo.failed->insert(state);
@@ -327,26 +406,27 @@ private:
 		// After a node consumed its own text/capture, try its children on `path` in
 		// priority order: static (exact first byte) > param > catch-all. The single
 		// point where bounded backtracking branches.
-		const T* dispatch(std::string_view path, Params& params, Memo& memo) const {
+		const T* dispatch_memo(std::string_view path, Params& params, Memo& memo) const {
 			if (path.empty()) { return value ? &*value : nullptr; }
 			char c = path.front();
 			for (std::size_t k = 0; k < indices.size(); ++k) {
 				if (indices[k] == c) {
-					if (const T* hit = statics[k]->match(path, params, memo)) { return hit; }
+					if (const T* hit = statics[k]->match_memo(path, params, memo)) { return hit; }
 					break;   // at most one static child starts with c; fall through to the wildcards
 				}
 			}
 			if (param) {
-				if (const T* hit = param->match(path, params, memo)) { return hit; }
+				if (const T* hit = param->match_memo(path, params, memo)) { return hit; }
 			}
 			if (catchall) {
-				if (const T* hit = catchall->match(path, params, memo)) { return hit; }
+				if (const T* hit = catchall->match_memo(path, params, memo)) { return hit; }
 			}
 			return nullptr;
 		}
 	};
 
 	Node root_;
+	bool nested_ = false;   // a pattern has 2+ catch-alls: lookups use the memoized matcher
 };
 
 }  // namespace radix

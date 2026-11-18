@@ -40,10 +40,15 @@ radix-router.
 
 ## Ordinary routes cost the same
 
-Strict A/B (`bench/ab.sh`, 17 routes, 14 paths, 10 interleaved rounds, job 261117-194506-e318e7):
-fix/main 1.010 [0.944, 1.080]; the A/A, main2/main, 1.097 [1.006, 1.196]. The first version
-memoized every failed catch-all state and was 2.5 to 2.9 times slower (193-214 ns to 532-586 ns):
-failing single-catch-all lookups allocated. The set is now touched only when catch-alls nest.
+Sharing the memoized recursion with the plain one cost ordinary lookups about 4 to 5 percent
+(exclusive A/B: fix/main 1.047 [1.033, 1.060] and 1.042 [1.020, 1.065] against A/A 1.006 and
+0.991), whether or not the set was lazy: the cost is the shared loop's code size and register
+pressure. So the two are separate. `insert()` sets a router flag when a pattern has two or more
+`*`; with it clear (Xapiand's routes), `find()` runs the plain matcher, unchanged from before,
+behind one branch. With it set, `find()` calls the out-of-line `find_memo`. The first version,
+which memoized every failed catch-all state, was 2.5 to 2.9 times slower (193-214 ns to 532-586
+ns) because failing single-catch-all lookups allocated. The A/B of the final shape is the
+exclusive job recorded in the quest journal (`bench/ab.sh`, 17 routes, 14 paths).
 
 ## Fixed times
 
@@ -53,5 +58,5 @@ The same family and artifacts at the fix: strict job recorded in the quest journ
 ## Evidence
 
 `test/test.cc` `test_nested_catch_all_bounded` (k=6, n=64 under 0.5 s, fails on main's matcher),
-`fuzz/diff.cc` (differential against main's matcher, `fuzz/radix_router_main.h`), `bench/ab.sh`
+`fuzz/diff.cc` (differential, both flag states against main's matcher, `fuzz/radix_router_main.h`), `bench/ab.sh`
 (typical table A/B with A/A). Numbers: see the quest journal.

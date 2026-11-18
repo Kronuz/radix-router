@@ -123,7 +123,8 @@ private:
 
 	// Failed non-final catch-all continuations of one lookup, as (node, remaining
 	// path length). A continuation's outcome depends only on those two, so each
-	// state is tried once: matching is O(nodes x path length). A state can only repeat
+	// state is tried once, and a repeat ends the loop (an earlier visit failed every
+	// later position too): matching is O(nodes x path length). A state can only repeat
 	// inside an enclosing catch-all's backtracking, so `nest` gates it: lookups with a
 	// single catch-all never touch the set.
 	struct Memo {
@@ -306,13 +307,13 @@ private:
 							params.truncate(saved);
 						} else {
 							const std::pair<const void*, std::size_t> state{this, path.size() - pos};
-							if (memo.failed.find(state) == memo.failed.end()) {
-								std::size_t saved = params.size();
-								params.add(name, path.substr(0, pos));
-								if (const T* hit = dispatch(path.substr(pos), params, memo)) { return hit; }
-								params.truncate(saved);
-								memo.failed.insert(state);
-							}
+							// An earlier visit already failed this position and every later one.
+							if (memo.failed.find(state) != memo.failed.end()) { return nullptr; }
+							std::size_t saved = params.size();
+							params.add(name, path.substr(0, pos));
+							if (const T* hit = dispatch(path.substr(pos), params, memo)) { return hit; }
+							params.truncate(saved);
+							memo.failed.insert(state);
 						}
 						if (pos < path.size() && path[pos] == '/') { ++pos; } else { break; }
 					}

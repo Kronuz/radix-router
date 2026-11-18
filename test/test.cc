@@ -215,6 +215,15 @@ static void test_nested_catch_all_bounded() {
 	CHECK(resolve(r, path) == "<none>");
 	double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 	CHECK(s < 0.5);
+	// Long path, 8 nested catch-alls: linear, not quadratic, in the path length.
+	Router deep;
+	deep.insert("/*a/*b/*c/*d/*e/*f/*g/*h/z", "deep8");
+	std::string longpath;
+	for (int i = 0; i < 4096; ++i) { longpath += "/x"; }
+	t0 = std::chrono::steady_clock::now();
+	CHECK(resolve(deep, longpath) == "<none>");
+	s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+	CHECK(s < 0.1);
 	CHECK(resolve(r, path + "/z").rfind("deep", 0) == 0);   // the continuation still matches
 }
 

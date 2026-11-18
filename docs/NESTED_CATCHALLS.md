@@ -20,9 +20,11 @@ Measured on main, strict job 261117-184755-fff446:
 
 ## The bound
 
-Each lookup records failed (catch-all node, remaining path length) states and skips them. A
-continuation's outcome depends on nothing else, so each state is tried once: matching is
-O(nodes x path length). The set is allocated on the first failed continuation, so lookups that
+Each lookup records failed (catch-all node, remaining path length) states. A continuation's
+outcome depends on nothing else, so each state is tried once, and a repeat ends the loop: an
+earlier visit already failed that position and every later one. Matching is O(nodes x path
+length). (Skipping a repeat but continuing the loop was still O(k x n^2): 1.21 s for k=8 over
+4096 `/x`, review finding F1; ending the loop gives 6.0 ms.) The set is allocated on the first failed continuation, so lookups that
 never fail a catch-all allocate nothing new. Match priority and capture order are unchanged.
 
 Only catch-all continuations are memoized. Static/param/catch-all alternatives at one node are

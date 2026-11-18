@@ -47,8 +47,13 @@ pressure. So the two are separate. `insert()` sets a router flag when a pattern 
 `*`; with it clear (Xapiand's routes), `find()` runs the plain matcher, unchanged from before,
 behind one branch. With it set, `find()` calls the out-of-line `find_memo`. The first version,
 which memoized every failed catch-all state, was 2.5 to 2.9 times slower (193-214 ns to 532-586
-ns) because failing single-catch-all lookups allocated. The A/B of the final shape is the
-exclusive job recorded in the quest journal (`bench/ab.sh`, 17 routes, 14 paths).
+ns) because failing single-catch-all lookups allocated. Final shape, exclusive A/B
+(`bench/ab.sh`, 17 routes, 14 paths, 8 rounds, job 261117-212248-c7a142): fix/main 0.920
+[0.892, 0.949] against an A/A of 0.996, so ordinary lookups are not slower. The plain matcher's
+source is main's, so the 8 percent is code generation, not logic: in this build (Apple clang -O2)
+the compiler inlines `match` into `dispatch` (880 bytes against 224 in main's build) once the
+memoized pair exists as separate functions. That is layout luck on one compiler and mix, not a
+claimed win.
 
 ## Fixed times
 

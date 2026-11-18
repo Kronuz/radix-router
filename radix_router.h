@@ -134,7 +134,8 @@ private:
 				return std::hash<const void*>()(k.first) * 31u + k.second;
 			}
 		};
-		std::unordered_set<std::pair<const void*, std::size_t>, Hash> failed;
+		using Set = std::unordered_set<std::pair<const void*, std::size_t>, Hash>;
+		std::unique_ptr<Set> failed;   // created on the first failure under a nested catch-all
 	};
 
 	struct Node {
@@ -308,12 +309,13 @@ private:
 						} else {
 							const std::pair<const void*, std::size_t> state{this, path.size() - pos};
 							// An earlier visit already failed this position and every later one.
-							if (memo.failed.find(state) != memo.failed.end()) { return nullptr; }
+							if (memo.failed && memo.failed->count(state)) { return nullptr; }
 							std::size_t saved = params.size();
 							params.add(name, path.substr(0, pos));
 							if (const T* hit = dispatch(path.substr(pos), params, memo)) { return hit; }
 							params.truncate(saved);
-							memo.failed.insert(state);
+							if (!memo.failed) { memo.failed = std::make_unique<typename Memo::Set>(); }
+							memo.failed->insert(state);
 						}
 						if (pos < path.size() && path[pos] == '/') { ++pos; } else { break; }
 					}

@@ -58,6 +58,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -107,7 +108,8 @@ public:
 	// pattern matches. Captured params are reported through `params` (cleared first).
 	const T* find(std::string_view path, Params& params) const {
 		params.clear();
-		return root_.match(path, params);
+		Memo memo;
+		return root_.match(path, params, memo);
 	}
 
 	// Convenience overload when the caller does not need the captured params.
@@ -118,6 +120,18 @@ public:
 
 private:
 	enum class NType : unsigned char { Static, Param, CatchAll };
+
+	// Failed non-final catch-all continuations of one lookup, as (node, remaining
+	// path length). A continuation's outcome depends only on those two, so each
+	// state is tried once: matching is O(nodes x path length). Allocated on first use.
+	struct Memo {
+		struct Hash {
+			std::size_t operator()(const std::pair<const void*, std::size_t>& k) const {
+				return std::hash<const void*>()(k.first) * 31u + k.second;
+			}
+		};
+		std::unordered_set<std::pair<const void*, std::size_t>, Hash> failed;
+	};
 
 	struct Node {
 		NType type = NType::Static;
@@ -249,13 +263,13 @@ private:
 		// Enter this node (consume its static edge, or capture a segment/run), then
 		// dispatch its children on the remainder. Returns the matched value, or
 		// nullptr to make the caller backtrack.
-		const T* match(std::string_view path, Params& params) const {
+		const T* match(std::string_view path, Params& params, Memo& memo) const {
 			switch (type) {
 				case NType::Static:
 					if (path.size() < this->path.size() || path.compare(0, this->path.size(), this->path) != 0) {
 						return nullptr;
 					}
-					return dispatch(path.substr(this->path.size()), params);
+					return dispatch(path.substr(this->path.size()), params, memo);
 
 				case NType::Param: {
 					std::size_t end = 0;
@@ -263,7 +277,7 @@ private:
 					if (end == 0) { return nullptr; }   // a param needs a non-empty segment
 					std::size_t saved = params.size();
 					params.add(name, path.substr(0, end));
-					if (const T* hit = dispatch(path.substr(end), params)) { return hit; }
+					if (const T* hit = dispatch(path.substr(end), params, memo)) { return hit; }
 					params.truncate(saved);
 					return nullptr;
 				}
@@ -279,10 +293,14 @@ private:
 						while (seg_end < path.size() && path[seg_end] != '/') { ++seg_end; }
 						if (seg_end == pos) { break; }   // no further segment to consume
 						pos = seg_end;
-						std::size_t saved = params.size();
-						params.add(name, path.substr(0, pos));
-						if (const T* hit = dispatch(path.substr(pos), params)) { return hit; }
-						params.truncate(saved);
+						const std::pair<const void*, std::size_t> state{this, path.size() - pos};
+						if (memo.failed.find(state) == memo.failed.end()) {
+							std::size_t saved = params.size();
+							params.add(name, path.substr(0, pos));
+							if (const T* hit = dispatch(path.substr(pos), params, memo)) { return hit; }
+							params.truncate(saved);
+							memo.failed.insert(state);
+						}
 						if (pos < path.size() && path[pos] == '/') { ++pos; } else { break; }
 					}
 					return nullptr;
@@ -293,20 +311,20 @@ private:
 		// After a node consumed its own text/capture, try its children on `path` in
 		// priority order: static (exact first byte) > param > catch-all. The single
 		// point where bounded backtracking branches.
-		const T* dispatch(std::string_view path, Params& params) const {
+		const T* dispatch(std::string_view path, Params& params, Memo& memo) const {
 			if (path.empty()) { return value ? &*value : nullptr; }
 			char c = path.front();
 			for (std::size_t k = 0; k < indices.size(); ++k) {
 				if (indices[k] == c) {
-					if (const T* hit = statics[k]->match(path, params)) { return hit; }
+					if (const T* hit = statics[k]->match(path, params, memo)) { return hit; }
 					break;   // at most one static child starts with c; fall through to the wildcards
 				}
 			}
 			if (param) {
-				if (const T* hit = param->match(path, params)) { return hit; }
+				if (const T* hit = param->match(path, params, memo)) { return hit; }
 			}
 			if (catchall) {
-				if (const T* hit = catchall->match(path, params)) { return hit; }
+				if (const T* hit = catchall->match(path, params, memo)) { return hit; }
 			}
 			return nullptr;
 		}

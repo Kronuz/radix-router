@@ -8,6 +8,7 @@
  * one position), so these lean on the awkward shapes.
  */
 
+#include <chrono>
 #include "radix_router.h"
 
 #include <cstdio>
@@ -202,6 +203,21 @@ static void test_namespace_then_id() {
 	CHECK(resolve(r, "/a/b/c/42", {"ns", "id"}) == "document ns=a/b/c id=42");
 }
 
+// Nested non-final catch-alls with no continuation match must fail in time linear-ish in the
+// path: 6 catch-alls over 64 segments took seconds before failed states were memoized.
+static void test_nested_catch_all_bounded() {
+	std::printf("nested catch-alls stay bounded on a failing path\n");
+	Router r;
+	r.insert("/*a/*b/*c/*d/*e/*f/z", "deep");
+	std::string path;
+	for (int i = 0; i < 64; ++i) { path += "/x"; }
+	auto t0 = std::chrono::steady_clock::now();
+	CHECK(resolve(r, path) == "<none>");
+	double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+	CHECK(s < 0.5);
+	CHECK(resolve(r, path + "/z").rfind("deep", 0) == 0);   // the continuation still matches
+}
+
 int main() {
 	std::printf("== radix::Router tests ==\n");
 	test_static();
@@ -213,6 +229,7 @@ int main() {
 	test_static_beside_param();
 	test_non_final_catch_all();
 	test_namespace_then_id();
+	test_nested_catch_all_bounded();
 
 	std::printf("\n%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;

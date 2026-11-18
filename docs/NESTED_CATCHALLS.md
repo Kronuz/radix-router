@@ -36,6 +36,18 @@ with a catch-all, and a client path is classified to one of them first. The blow
 route set with two or more non-final catch-alls (as the fuzzer builds), e.g. another consumer of
 radix-router.
 
+## Ordinary routes cost the same
+
+Strict A/B (`bench/ab.sh`, 17 routes, 14 paths, 10 interleaved rounds, job 261117-194506-e318e7):
+fix/main 1.010 [0.944, 1.080]; the A/A, main2/main, 1.097 [1.006, 1.196]. The first version
+memoized every failed catch-all state and was 2.5 to 2.9 times slower (193-214 ns to 532-586 ns):
+failing single-catch-all lookups allocated. The set is now touched only when catch-alls nest.
+
+## Fixed times
+
+The same family and artifacts at the fix: strict job recorded in the quest journal
+(`fuzz/slow_repro.cc`; k=8, n=64 was 207 s on main).
+
 ## Evidence
 
 `test/test.cc` `test_nested_catch_all_bounded` (k=6, n=64 under 0.5 s, fails on main's matcher),

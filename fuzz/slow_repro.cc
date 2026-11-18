@@ -15,7 +15,7 @@ int main(int argc, char** argv) {
 		pat += "/z";
 		radix::Router<int> r;
 		r.insert(pat, 1);
-		for (int n : {8, 16, 32, 64}) {
+		for (int n : {8, 16, 32, 64, 4096}) {
 			std::string path;
 			for (int i = 0; i < n; ++i) { path += "/x"; }
 			radix::Params p;
